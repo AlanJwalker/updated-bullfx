@@ -1,0 +1,176 @@
+Objective
+Add historical candle loading from Twelve Data API and timeframe switching to the trading terminal. The chart should load ~100 historical candles on open/instrument switch and support 1m, 5m, 15m, 30m, 1h timeframes. Real-time WebSocket updates continue after historical load.
+
+Tasks
+
+T001: Add Historical Candle API Endpoint
+Blocked By: []
+
+Details:
+Create GET /api/history/:symbol/:interval in server/routes.ts.
+
+Accepted intervals:
+1min
+5min
+15min
+30min
+1h
+
+Call Twelve Data API:
+https://api.twelvedata.com/time_series?symbol=SYMBOL&interval=INTERVAL&outputsize=100&apikey=KEY
+
+Use the existing SYMBOL_TO_TWELVEDATA mapping from price-engine.ts.
+
+Parse response values[]:
+datetime
+open
+high
+low
+close
+
+Return formatted candles:
+
+{
+  time: unix_timestamp,
+  open: number,
+  high: number,
+  low: number,
+  close: number
+}
+
+Sort candles ascending by time.
+
+Add in-memory cache:
+
+key = symbol + interval
+TTL = 60 seconds
+
+Cache avoids repeated API requests when user switches timeframe.
+
+If API returns error or symbol unsupported:
+return empty array (frontend fallback will handle it).
+
+Files:
+server/routes.ts
+server/price-engine.ts
+
+Acceptance:
+curl /api/history/EUR%2FUSD/1min returns ~100 candles.
+
+
+T002: Add Timeframe Selector UI
+Blocked By: []
+
+Details:
+Add timeframe selector above chart in Terminal.tsx.
+
+Buttons:
+1m
+5m
+15m
+30m
+1h
+
+Store state:
+
+const [timeframe, setTimeframe] = useState("1min")
+
+Highlight active timeframe with amber color.
+
+Add data-testid attributes for testing.
+
+Files:
+client/src/pages/Terminal.tsx
+
+Acceptance:
+User can click timeframe buttons and state updates.
+
+
+T003: Load Historical Candles on Chart Open & Timeframe Change
+Blocked By: [T001, T002]
+
+Details:
+Update ServerChart component.
+
+On:
+• chart mount
+• instrument change
+• timeframe change
+
+Fetch:
+
+/api/history/${symbol}/${timeframe}
+
+If candles returned:
+
+series.setData(candles)
+
+If empty:
+
+fallback to tick history endpoint:
+
+/api/price-history/${productId}
+
+Display loading spinner while fetching.
+
+Files:
+client/src/pages/Terminal.tsx
+
+Acceptance:
+Chart loads instantly with ~100 candles.
+
+
+T004: Real-Time Candle Updates After Historical Load
+Blocked By: [T003]
+
+Details:
+Continue receiving WebSocket price updates.
+
+Determine candle duration:
+
+1min = 60
+5min = 300
+15min = 900
+30min = 1800
+1h = 3600
+
+If tick belongs to current candle:
+
+update high
+update low
+update close
+
+Use:
+
+series.update()
+
+If tick begins new candle:
+
+push new candle to series.
+
+Files:
+client/src/pages/Terminal.tsx
+
+Acceptance:
+Chart updates smoothly in real-time.
+
+
+T005: Increase Tick History Buffer
+Blocked By: []
+
+Details:
+Increase MAX_TICK_HISTORY from:
+
+300
+
+to:
+
+5000
+
+This allows fallback chart building if Twelve Data fails.
+
+Files:
+server/price-engine.ts
+
+Acceptance:
+Tick buffer stores up to 5000 ticks per instrument.

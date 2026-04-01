@@ -1,0 +1,171 @@
+PROJECT UPDATE: Correct Pip and PnL Calculation for Forex and Metals
+
+Context:
+The platform currently calculates PnL using a generic formula, which works for forex pairs but produces incorrect results for metals like XAUUSD.
+
+We must implement correct pip size, pip value, and PnL calculation based on instrument type.
+
+---
+
+GOAL
+
+Implement proper instrument-aware PnL calculation for:
+
+1. Forex pairs (EURUSD, GBPUSD, USDJPY, etc.)
+2. Metals (XAUUSD / Gold)
+
+---
+
+FOREX PIP RULES
+
+Most forex pairs:
+
+1 pip = 0.0001
+
+Example:
+
+EURUSD
+Entry = 1.15920
+Current = 1.16580
+
+Pips = (current - entry) / 0.0001
+
+Lot value:
+
+1 lot = $10 per pip
+
+PnL formula:
+
+pips * lotSize * 10
+
+---
+
+JPY PAIRS
+
+JPY pairs use different pip size.
+
+Example:
+
+USDJPY
+1 pip = 0.01
+
+Pips:
+
+(current - entry) / 0.01
+
+---
+
+GOLD (XAUUSD)
+
+Gold uses a different structure.
+
+Standard rules:
+
+1 lot = 100 oz
+1 pip = 0.01
+
+Example:
+
+Entry = 2310.50
+Current = 2312.00
+
+Pip movement:
+
+(2312.00 - 2310.50) / 0.01 = 150 pips
+
+Pip value:
+
+1 lot = $1 per pip
+
+PnL formula:
+
+pips * lotSize * 1
+
+---
+
+CREATE UTILITY MODULE
+
+Create a new file:
+
+server/utils/pipCalculator.ts
+
+Functions:
+
+getPipSize(symbol)
+getPipValue(symbol)
+calculatePnL(symbol, side, entryPrice, currentPrice, lotSize)
+
+---
+
+PIP SIZE FUNCTION
+
+Rules:
+
+if symbol ends with "JPY" → pipSize = 0.01
+
+if symbol is "XAUUSD" → pipSize = 0.01
+
+otherwise → pipSize = 0.0001
+
+---
+
+PIP VALUE FUNCTION
+
+Rules:
+
+Forex standard pairs:
+
+pipValue = 10
+
+Gold:
+
+pipValue = 1
+
+---
+
+PnL CALCULATION
+
+Formula:
+
+priceDiff = currentPrice - entryPrice
+
+if side == "sell":
+priceDiff = entryPrice - currentPrice
+
+pips = priceDiff / pipSize
+
+pnl = pips * lotSize * pipValue
+
+---
+
+INTEGRATION
+
+Replace existing PnL calculation inside the trade engine with the new calculatePnL() function.
+
+All open positions should now use:
+
+calculatePnL(symbol, side, entryPrice, currentPrice, lotSize)
+
+---
+
+EXPECTED RESULT
+
+Correct PnL behavior:
+
+EURUSD
+1 lot → $10 per pip
+
+XAUUSD
+1 lot → $1 per pip
+
+Small price movements should produce realistic profit/loss values.
+
+---
+
+IMPORTANT
+
+Do not modify existing price feeds.
+
+Only fix pip and PnL calculation logic.
+
+Ensure this works for all instruments shown in the terminal.

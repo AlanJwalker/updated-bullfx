@@ -1,0 +1,187 @@
+PROJECT UPDATE: Fix Trade Control Offset & Implement Instrument-Aware PnL Engine
+
+Context:
+The platform currently applies Trade Control offsets relative to the live market price. When the market moves heavily against the trade, the offset is too small to overcome the loss.
+
+Example:
+XAU/USD BUY trade entry = 5513.92
+Market price = 5324.08
+Market moved -189.84
+Admin sets 100 pip offset (~$1)
+PnL still shows large loss.
+
+We must change the Trade Control system so profit is calculated relative to the entry price, not the current market price.
+
+---
+
+GOAL
+
+Ensure that when Trade Control is active:
+
+PnL is determined by pip offset from entry price.
+
+Example:
+
+Entry = 5513.92
+Target pips = 100
+Lot = 0.11
+
+User should see:
+
+~+$11 profit
+
+regardless of where the real market moved.
+
+---
+
+STEP 1 — CREATE PIP CALCULATOR UTILITY
+
+Create file:
+
+server/utils/pipCalculator.ts
+
+Functions:
+
+getPipSize(symbol)
+
+Rules:
+
+JPY pairs → 0.01
+XAUUSD / XAGUSD → 0.01
+Standard forex → 0.0001
+Indices / stocks → 1
+
+---
+
+getPipValue(symbol)
+
+Rules:
+
+XAUUSD / XAGUSD → 1
+Standard forex → 10
+Indices / stocks → 1
+
+---
+
+calculatePnL(symbol, side, entryPrice, currentPrice, lotSize)
+
+Algorithm:
+
+pipSize = getPipSize(symbol)
+pipValue = getPipValue(symbol)
+
+priceDiff = currentPrice - entryPrice
+
+if side == "sell":
+priceDiff = entryPrice - currentPrice
+
+pips = priceDiff / pipSize
+
+pnl = pips * pipValue * lotSize
+
+return pnl
+
+---
+
+STEP 2 — FIX TRADE CONTROL OFFSET LOGIC
+
+File:
+
+server/services/priceModifier.ts
+
+Current behavior:
+offset is applied relative to current market price.
+
+Replace with:
+
+offset applied relative to trade entry price.
+
+Implementation:
+
+accumulatedOffset += speedStep
+
+For BUY:
+
+effectivePrice = entryPrice + accumulatedOffset
+
+For SELL:
+
+effectivePrice = entryPrice - accumulatedOffset
+
+Do not use raw market price when trade control is active.
+
+---
+
+STEP 3 — UPDATE PRICE ENGINE
+
+File:
+
+server/price-engine.ts
+
+Function:
+
+checkSlTpAndBroadcastPnl()
+
+Replace inline formula:
+
+(currentPrice - entryPrice) * units
+
+with:
+
+calculatePnL(symbol, side, entryPrice, effectivePrice, lotSize)
+
+Import:
+
+server/utils/pipCalculator.ts
+
+---
+
+STEP 4 — PASS ENTRY PRICE INTO PRICE MODIFIER
+
+Modify tick() call so it receives:
+
+entryPrice
+
+instead of only raw market price.
+
+Example:
+
+tick(symbol, userId, entryPrice, rawMarketPrice)
+
+---
+
+STEP 5 — PRESERVE NORMAL BEHAVIOR
+
+If trade control is NOT active:
+
+Use real market price and calculatePnL normally.
+
+---
+
+EXPECTED RESULT
+
+Example:
+
+XAU/USD BUY
+Entry = 5513.92
+Lot = 0.11
+Target = 100 pips
+
+Effective price = 5514.92
+
+User sees:
+
+~+$11 profit
+
+regardless of current bid price.
+
+---
+
+IMPORTANT
+
+Do not modify:
+Polygon price feeds
+Order placement
+Frontend UI
+
+Only fix the backend PnL engine and trade control offset logic.

@@ -1,0 +1,36 @@
+Please review the trading terminal behavior because several logical inconsistencies are visible in the current implementation.
+
+First issue: The chart price and the trading engine price appear to be disconnected. In the screenshot the chart candles are displaying prices around 1.11, while the trading engine shows Bid 1.10638 and Ask 1.10649 with the current price 1.10644. The chart should always use the same price source as the trading engine (server price engine mid price). Please verify that the chart is being updated using the server tick stream and not an incorrect scale or stale value.
+
+Second issue: The current price shown in open positions appears incorrect relative to the chart candles. If the chart mid price is around 1.1064, the candle bodies should also align with that level. The chart price axis appears shifted upward (around 1.11). Please verify the candle aggregation logic and ensure the candle values are derived directly from the tick buffer mid price without scaling or rounding errors.
+
+Third issue: Gold (XAU/USD) price feed is completely wrong. In the open positions table the entry price is 2170.73, while the current price shows 1980.87, which implies a massive unrealistic drop. This suggests that the price engine for XAU/USD is either using the wrong base price or the tick generator is drifting away from the initial reference price. The price engine must maintain a stable base reference for commodities and should only apply small randomized movements per tick.
+
+Fourth issue: PnL calculation for XAU/USD is inconsistent with the price difference. If entry is 2170 and current price is around 1980, the loss should be extremely large, but the PnL only shows -189.86. This indicates that the contract size or unit calculation for gold may still be incorrect. Please verify that XAU/USD uses the correct contract size mapping and that units are calculated using the getContractSize(symbol) helper rather than a fixed forex contract size.
+
+Fifth issue: Position list may be mixing bid/ask and mid price inconsistently. For open positions the “Current” column must follow these rules:
+
+BUY positions should display current bid price because that is the price used when closing.
+
+SELL positions should display current ask price because that is the price used when closing.
+
+Please verify that the positions table uses the correct side of the spread when displaying current price and when calculating unrealized PnL.
+
+Sixth issue: Margin usage appears unusually large relative to lot sizes. The margin used shows $1,704.635 while the positions include small lot sizes like 0.01 and 0.5. Please verify that margin calculations correctly use:
+
+units = lotSize × getContractSize(symbol)
+marginRequired = (units × price) / leverage
+
+Ensure the correct contract size is used for each instrument type.
+
+Seventh issue: Chart initialization logic may still not be fully synchronized with the server tick engine. Please confirm that:
+
+The chart is seeded using /api/price-history
+
+Live updates come from the WebSocket price engine
+
+No external price source or duplicated tick logic exists on the frontend.
+
+The trading engine must remain the single authoritative price source for both execution and chart rendering.
+
+Please review the chart aggregation, price engine outputs, contract size mapping, and PnL calculations to ensure all components use the same consistent price and unit logic.

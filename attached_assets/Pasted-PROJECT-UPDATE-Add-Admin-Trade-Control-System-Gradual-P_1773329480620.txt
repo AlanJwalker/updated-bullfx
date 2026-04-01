@@ -1,0 +1,177 @@
+PROJECT UPDATE: Add Admin Trade Control System (Gradual Profit Engine)
+
+Context:
+This is a paper-trading demo platform using:
+
+* React frontend (client)
+* Node.js + Express backend (server)
+* Drizzle ORM database
+* Polygon API for live prices
+
+Goal:
+Create an ADMIN CONTROL SYSTEM that allows the admin to force selected user trades to gradually move into profit. The profit must appear naturally pip-by-pip, not as an instant jump.
+
+---
+
+FEATURES TO BUILD
+
+1. DATABASE TABLE
+
+Create a new table called `trade_controls`.
+
+Columns:
+
+id (primary key)
+user_id (reference user)
+trade_id (reference trade)
+force_profit (boolean)
+profit_speed (string: slow | normal | fast)
+target_pips (integer)
+created_at (timestamp)
+
+---
+
+2. ADMIN API
+
+Create API endpoint:
+
+POST /admin/control-trade
+
+Body example:
+
+{
+"user_id": 12,
+"trade_id": 55,
+"force_profit": true,
+"profit_speed": "normal",
+"target_pips": 50
+}
+
+This API stores the configuration in the `trade_controls` table.
+
+---
+
+3. PRICE MODIFIER ENGINE
+
+Create a backend module:
+
+server/services/priceModifier.ts
+
+Function:
+
+modifyPrice(userId, trade, marketPrice)
+
+Logic:
+
+1. Check if a trade_control record exists for the user and trade.
+2. If force_profit is false → return normal marketPrice.
+3. If force_profit is true → gradually steer price in the direction of the trade.
+
+Example:
+
+BUY trade:
+price = marketPrice + step
+
+SELL trade:
+price = marketPrice - step
+
+---
+
+4. PROFIT SPEED CONTROL
+
+Speed determines step size:
+
+slow   → 0.01 pip per tick
+normal → 0.05 pip per tick
+fast   → 0.2 pip per tick
+
+Example price stream for BUY:
+
+1900.00
+1900.03
+1900.07
+1900.12
+1900.18
+
+Profit increases naturally.
+
+---
+
+5. TARGET PROFIT LIMIT
+
+Once the trade reaches target_pips profit:
+
+Stop modifying price and return real market price.
+
+---
+
+6. TRADE ENGINE INTEGRATION
+
+Modify the trade PnL calculation flow.
+
+Current flow:
+
+Polygon Price → PnL Calculation
+
+New flow:
+
+Polygon Price
+→ Price Modifier Engine
+→ PnL Calculation
+→ WebSocket update to frontend
+
+Each user may receive slightly different price ticks.
+
+---
+
+7. ADMIN PANEL UI
+
+Add a simple admin panel component.
+
+Fields:
+
+Select User
+Select Trade
+Force Profit Toggle
+Profit Speed Dropdown (slow / normal / fast)
+Target Pips Input
+Apply Button
+
+Call API:
+
+POST /admin/control-trade
+
+---
+
+8. REALTIME PROFIT UPDATES
+
+Profit must increase gradually when the frontend receives price updates.
+
+Example display:
+
++3
++7
++12
++18
++26
+
+NOT instant jumps like +5000.
+
+---
+
+9. IMPORTANT
+
+Do NOT modify PnL directly.
+
+Always modify the price ticks before PnL calculation so that the profit appears natural.
+
+---
+
+OUTPUT EXPECTED
+
+1. New database table
+2. Admin API endpoint
+3. Price Modifier service
+4. Integration into trade engine
+5. Admin panel UI component
+6. Gradual pip-by-pip profit movement

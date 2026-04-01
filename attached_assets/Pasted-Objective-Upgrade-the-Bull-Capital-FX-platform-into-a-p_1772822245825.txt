@@ -1,0 +1,228 @@
+Objective
+Upgrade the Bull Capital FX platform into a professional forex trading terminal while fixing current bugs and adding advanced broker features.
+
+---
+
+SECTION 1 — Branding and Authentication Fix
+
+1. Rename the platform branding from "Dupont MVP Clone" to "Bull Capital FX" everywhere in the project including:
+
+* OAuth login screens
+* Page titles
+* metadata
+* navigation branding
+
+2. Replace the default Replit authentication modal with a custom login/signup page.
+
+The new auth system should support:
+
+* email + password signup
+* email + password login
+* optional Google login
+* maintain existing session cookie authentication backend
+
+---
+
+SECTION 2 — Markets and Instruments Fix
+
+3. Expand the products table to include all major and minor forex pairs.
+
+Major Pairs:
+EURUSD
+GBPUSD
+USDJPY
+USDCHF
+USDCAD
+AUDUSD
+NZDUSD
+
+Minor Pairs:
+EURGBP
+EURJPY
+EURCHF
+GBPJPY
+GBPCHF
+AUDJPY
+CADJPY
+CHFJPY
+
+4. Remove all cryptocurrency instruments completely:
+
+* remove crypto from database
+* remove crypto tab from markets page
+
+5. Add commodity markets:
+
+XAUUSD (Gold)
+XAGUSD (Silver)
+WTI (Crude Oil)
+BRENT (Brent Oil)
+NATGAS (Natural Gas)
+
+Ensure the commodities category displays correctly on the Markets page.
+
+---
+
+SECTION 3 — Trading Engine Fixes
+
+6. Fix stop loss / take profit validation to prevent immediate auto-close.
+
+Server-side validation rules:
+
+BUY orders:
+stopLoss must be BELOW entry price
+takeProfit must be ABOVE entry price
+
+SELL orders:
+stopLoss must be ABOVE entry price
+takeProfit must be BELOW entry price
+
+Reject invalid orders.
+
+7. Ensure SL/TP triggers use the server price engine current price and not the TradingView chart price.
+
+---
+
+SECTION 4 — Edit Stop Loss / Take Profit
+
+8. Allow editing SL and TP for open positions.
+
+Add new API route:
+
+PATCH /api/orders/:id
+
+Body fields:
+stopLoss
+takeProfit
+
+Update the open positions table UI to allow editing SL/TP and submitting updates.
+
+---
+
+SECTION 5 — Pending Orders (Limit / Stop Orders)
+
+Add support for pending order types:
+
+Buy Limit
+Sell Limit
+Buy Stop
+Sell Stop
+
+Database updates:
+orders table must include:
+
+orderType (market | buy_limit | sell_limit | buy_stop | sell_stop)
+triggerPrice
+
+Price engine must check pending orders every tick and execute them when trigger conditions are met.
+
+Example rules:
+
+Buy Limit executes when price <= triggerPrice
+Sell Limit executes when price >= triggerPrice
+Buy Stop executes when price >= triggerPrice
+Sell Stop executes when price <= triggerPrice
+
+Add a Pending Orders table in the trading terminal.
+
+---
+
+SECTION 6 — Margin and Leverage Engine
+
+Add margin simulation similar to real forex brokers.
+
+Account metrics required:
+
+balance
+equity
+marginUsed
+freeMargin
+marginLevel
+
+Margin calculation:
+
+marginRequired = (lotSize * 100000 * price) / leverage
+
+Default leverage = 1:100
+
+Update the UI to display these metrics in the trading terminal.
+
+Add liquidation logic:
+
+If marginLevel < 100% automatically close the largest losing position.
+
+---
+
+SECTION 7 — IB (Introducing Broker) Tracking System
+
+The onboarding already captures ibCode.
+
+Implement IB referral tracking.
+
+Add new database table:
+
+ib_referrals
+id
+ibCode
+referredUserId
+tradeVolume
+commissionEarned
+
+Commission model:
+
+$5 commission per 1 lot traded.
+
+Track:
+
+* total referred users
+* total traded volume
+* total commission earned
+
+Create an Admin dashboard page:
+
+Admin → IB Management
+
+Display:
+IB code
+referred users
+total volume
+commission earned
+
+---
+
+SECTION 8 — Trading Terminal Improvements
+
+Improve the terminal UI:
+
+Add spread display:
+Bid / Ask prices
+
+Add quick lot presets:
+0.01
+0.05
+0.1
+0.5
+1.0
+
+Add SL/TP suggestions based on current price.
+
+Ensure PnL updates continue streaming via WebSocket.
+
+---
+
+Acceptance Criteria
+
+The system should now support:
+
+• full forex trading terminal
+• market orders
+• pending orders
+• stop loss and take profit editing
+• real-time PnL updates
+• margin and leverage system
+• automatic liquidation logic
+• IB referral tracking
+• expanded forex and commodity markets
+• no crypto markets
+• correct SL/TP validation
+• Bull Capital FX branding everywhere

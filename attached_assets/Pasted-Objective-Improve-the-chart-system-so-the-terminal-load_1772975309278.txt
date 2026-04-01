@@ -1,0 +1,134 @@
+Objective
+Improve the chart system so the terminal loads historical candles (minimum 100 candles) and allows timeframe switching like a real trading platform. The chart must seed with historical data from Twelve Data instead of relying only on recent tick history.
+
+Tasks
+
+T001 — Add Historical Candle API Endpoint
+Blocked By: []
+Details:
+Create a new backend endpoint to fetch historical candles from Twelve Data.
+
+Endpoint:
+GET /api/history/:symbol/:interval
+
+Example Twelve Data request:
+https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1min&outputsize=100&apikey=API_KEY
+
+Supported intervals:
+1min
+5min
+15min
+30min
+1h
+
+The endpoint should:
+• call Twelve Data time_series
+• parse open, high, low, close, datetime
+• return candles formatted for lightweight-charts:
+
+{
+  time: unix_timestamp,
+  open: number,
+  high: number,
+  low: number,
+  close: number
+}
+
+Files:
+server/routes.ts
+
+Acceptance:
+GET /api/history/EURUSD/1min returns ~100 candles
+
+
+T002 — Load Historical Candles When Chart Opens
+Blocked By: [T001]
+
+Details:
+Update the ServerChart component in Terminal.tsx.
+
+When a user opens the terminal or changes instrument:
+• fetch /api/history/${symbol}/${timeframe}
+• convert returned candles
+• seed the chart with series.setData()
+
+Example:
+
+const candles = await fetch(`/api/history/${symbol}/${tf}`)
+series.setData(candles)
+
+This ensures the chart immediately shows the last 100 candles.
+
+Files:
+client/src/pages/Terminal.tsx
+
+Acceptance:
+Chart loads instantly with historical candles instead of starting empty.
+
+
+T003 — Add Timeframe Selector
+Blocked By: []
+
+Details:
+Add timeframe buttons above the chart:
+
+1m | 5m | 15m | 30m | 1h
+
+Store selected timeframe in React state.
+
+Example:
+
+const [timeframe, setTimeframe] = useState("1min")
+
+When timeframe changes:
+• call /api/history/${symbol}/${timeframe}
+• reload candles
+• continue real-time updates
+
+Files:
+client/src/pages/Terminal.tsx
+
+Acceptance:
+User can switch timeframes and chart reloads candles.
+
+
+T004 — Continue Real-Time Updates
+Blocked By: [T002]
+
+Details:
+After historical candles load:
+
+• continue receiving live prices via WebSocket
+• update the current candle (not create a new one unless minute changes)
+
+Logic:
+
+if same candle minute:
+  update high/low/close
+
+if new minute:
+  push new candle
+
+Files:
+client/src/pages/Terminal.tsx
+
+
+T005 — Increase Tick History Buffer
+Blocked By: []
+
+Details:
+Increase tick history storage in price-engine.ts:
+
+from:
+300 ticks
+
+to:
+5000 ticks
+
+This allows fallback chart history if API fails.
+
+Files:
+server/price-engine.ts
+
+Acceptance:
+Chart still works if API temporarily fails.

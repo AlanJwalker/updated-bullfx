@@ -1,0 +1,52 @@
+Message to Replit Agent
+
+Proceed with implementing the price history buffer system for the trading engine so that the terminal chart loads with historical candles instead of starting empty and producing an initial spike.
+
+The server price engine must maintain a per-instrument tick history ring buffer. Each product should store up to the last 300 ticks. Every tick entry must include the following structure:
+
+{ time: number (unix seconds), mid: number, bid: number, ask: number }
+
+The tick buffer should be updated inside the existing price engine tick loop. After each price update, push a new record into the corresponding product’s history buffer containing the current timestamp, mid price, bid, and ask. When the buffer exceeds 300 entries, remove the oldest entry so the array always stays capped.
+
+Export a helper function from the price engine:
+
+getPriceHistory(productId: number)
+
+This function must return the tick array for the requested product.
+
+Next, add a REST endpoint in server/routes.ts:
+
+GET /api/price-history/:productId
+
+This endpoint should call getPriceHistory(productId) and return the raw tick history array as JSON. This endpoint should not require authentication because market price data is public similar to the /api/products endpoint.
+
+On the frontend, modify the ServerChart component in client/src/pages/Terminal.tsx so that when the chart initializes it first requests historical ticks from:
+
+/api/price-history/${productId}
+
+After receiving the tick array, aggregate the ticks into 1-minute OHLC candles using the mid price. Use the standard bucket calculation:
+
+bucket = time - (time % 60)
+
+For each bucket compute:
+
+open = first mid price in bucket
+high = highest mid price in bucket
+low = lowest mid price in bucket
+close = last mid price in bucket
+
+Once the candle list is generated, initialize the chart using:
+
+series.setData(candles)
+
+Store the candle array in candlesRef.current so that the existing real-time tick updates can continue appending or updating the current candle without resetting the chart.
+
+Also store the last candle reference in currentCandleRef so that incoming live ticks correctly merge into the current candle instead of creating a new one.
+
+One additional safeguard must be added: if the tick history contains less than one full minute of data (for example right after server startup), initialize the chart with a flat candle using the first available tick so the chart does not produce an extreme spike.
+
+After implementation the terminal should behave as follows:
+
+When the terminal loads it immediately displays several minutes of historical candles. The chart should no longer start empty or create an initial spike. Live ticks from the WebSocket must continue updating the last candle seamlessly after the historical seed is applied.
+
+The tick buffer must store mid, bid, and ask even though the chart currently uses only mid price. This ensures future compatibility for spread visualization or bid/ask overlays.

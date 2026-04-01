@@ -1,0 +1,29 @@
+Message to Replit Agent
+
+The price mismatch between the platform and the real market (for example TradingView EUR/USD ≈ 1.16168 while the internal engine shows ~1.106) is expected because the platform currently uses a synthetic price engine rather than a real market data feed. However, the current implementation has a flaw where the random walk accumulates drift over time, causing instruments to move unrealistically far from their intended base price. This explains cases like XAU/USD drifting from ~2170 down toward ~1980 and the general disconnection between the platform prices and realistic market levels.
+
+The correct approach is not to attempt to match TradingView or external market prices, since the platform is a simulated trading environment. Instead, the price engine must maintain stable realistic price ranges using mean-reversion so prices fluctuate naturally without drifting indefinitely.
+
+Please implement the following improvements in the price engine.
+
+First, modify the random walk algorithm so it includes mean-reversion toward a base price. In server/price-engine.ts update the getRandomWalk() function so it receives both the current price and the base price. When the price drifts beyond a predefined threshold from the base price, the algorithm should bias movement back toward the base. The thresholds should vary by instrument type:
+
+Forex pairs: allow roughly ±2% drift from base price
+Commodities: allow roughly ±5% drift from base price
+Stocks and indices: allow roughly ±3% drift from base price
+
+If the price moves beyond this range, apply a reversion force proportional to the distance from the base price. The further the price moves beyond the threshold, the stronger the bias should become pushing it back toward the base price. This preserves short-term volatility but prevents long-term runaway drift.
+
+Additionally reduce excessive volatility in the walk. For commodities lower the maximum change per tick slightly (for example from 0.003 to 0.002) and reduce the spike multiplier so that rare spikes are capped around 2× instead of 3×. This will still produce natural movement but eliminate extreme jumps.
+
+Update the tick() loop so that getRandomWalk() receives the instrument’s base price when generating the next price step.
+
+Next, address the issue where the engine loads already-drifted prices from the database after restart. Because current prices are persisted periodically, the engine may restart using unrealistic values as its new base. To prevent this, modify initPriceCache() so that it validates stored prices against known reference prices. If a stored price has drifted beyond a reasonable threshold from its reference value, reset it to a realistic baseline.
+
+Define reference prices in the seed data for each instrument (for example EUR/USD around 1.08–1.10, GBP/USD around 1.26, XAU/USD around 2050–2070, etc.). During initialization compare the stored currentPrice to the reference price and clamp it back into a realistic range if necessary. This ensures the engine always starts from plausible market levels even after long simulation runs.
+
+After these changes the behavior should be as follows:
+
+Prices should fluctuate naturally but remain anchored near their base price. Even after running for 30 minutes or longer, no instrument should drift more than roughly 5–8% from its base level. Commodity prices such as XAU/USD should remain near their realistic range rather than drifting hundreds of dollars away. Forex pairs should remain near their original base levels while still showing natural volatility.
+
+This change will stabilize the simulated market and remove the unrealistic price drift that currently causes chart and price inconsistencies.
